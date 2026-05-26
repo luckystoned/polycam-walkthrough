@@ -2,19 +2,52 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
+/**
+ * ============================================================
+ * DETECCIÓN DE DISPOSITIVO
+ * ============================================================
+ */
+
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+/**
+ * ============================================================
+ * CONFIGURACIÓN GENERAL DE LA ESCENA
+ * ============================================================
+ */
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 1.7, 3);
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+
+const initialCameraPosition = new THREE.Vector3(0, 1.7, 3);
+const initialCameraRotation = new THREE.Euler(0, 0, 0, 'YXZ');
+
+camera.position.copy(initialCameraPosition);
+camera.rotation.copy(initialCameraRotation);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
 document.body.style.margin = '0';
 document.body.style.overflow = 'hidden';
 document.body.style.touchAction = 'none';
+
 document.body.appendChild(renderer.domElement);
+
+/**
+ * ============================================================
+ * ILUMINACIÓN
+ * ============================================================
+ */
 
 const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2);
 scene.add(light);
@@ -23,18 +56,46 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 2);
 dirLight.position.set(5, 10, 5);
 scene.add(dirLight);
 
+/**
+ * ============================================================
+ * CONTROLES DE CÁMARA
+ * ============================================================
+ */
+
 const controls = new PointerLockControls(camera, document.body);
+
 scene.add(controls.object);
+controls.object.position.copy(initialCameraPosition);
+
+/**
+ * ============================================================
+ * CARGA DEL MODELO GLB
+ * ============================================================
+ */
 
 const loader = new GLTFLoader();
-loader.load('/model.glb', (gltf) => {
-  const model = gltf.scene;
-  model.position.set(0, 0, 0);
-  model.scale.set(1, 1, 1);
-  scene.add(model);
-});
 
-// ---------- DESKTOP CONTROLS ----------
+loader.load(
+  '/model.glb',
+  (gltf) => {
+    const model = gltf.scene;
+
+    model.position.set(0, 0, 0);
+    model.scale.set(1, 1, 1);
+
+    scene.add(model);
+  },
+  undefined,
+  (error) => {
+    console.error('Error cargando GLB:', error);
+  }
+);
+
+/**
+ * ============================================================
+ * ESTADO DE MOVIMIENTO
+ * ============================================================
+ */
 
 const keys = {
   forward: false,
@@ -43,11 +104,24 @@ const keys = {
   right: false,
 };
 
+let moveX = 0;
+let moveY = 0;
+
+/**
+ * ============================================================
+ * CONTROLES DE TECLADO PARA DESKTOP
+ * ============================================================
+ */
+
 document.addEventListener('keydown', (event) => {
   if (event.code === 'KeyW' || event.code === 'ArrowUp') keys.forward = true;
   if (event.code === 'KeyS' || event.code === 'ArrowDown') keys.backward = true;
   if (event.code === 'KeyA' || event.code === 'ArrowLeft') keys.left = true;
   if (event.code === 'KeyD' || event.code === 'ArrowRight') keys.right = true;
+
+  if (event.code === 'KeyR') {
+    resetPlayerPosition();
+  }
 });
 
 document.addEventListener('keyup', (event) => {
@@ -57,9 +131,78 @@ document.addEventListener('keyup', (event) => {
   if (event.code === 'KeyD' || event.code === 'ArrowRight') keys.right = false;
 });
 
-// ---------- MOBILE UI ----------
+/**
+ * ============================================================
+ * PANEL DE INSTRUCCIONES DESKTOP
+ * ============================================================
+ */
+
+const desktopInstructionsPanel = document.createElement('div');
+
+desktopInstructionsPanel.innerHTML = `
+  <strong>Controles</strong><br/>
+  WASD / Flechas: moverse<br/>
+  Mouse: mirar<br/>
+  R: resetear posición<br/>
+  ESC: salir
+`;
+
+desktopInstructionsPanel.style.position = 'fixed';
+desktopInstructionsPanel.style.top = '16px';
+desktopInstructionsPanel.style.left = '16px';
+desktopInstructionsPanel.style.zIndex = '150';
+desktopInstructionsPanel.style.padding = '12px 14px';
+desktopInstructionsPanel.style.borderRadius = '12px';
+desktopInstructionsPanel.style.background = 'rgba(0,0,0,0.55)';
+desktopInstructionsPanel.style.color = 'white';
+desktopInstructionsPanel.style.fontFamily = 'sans-serif';
+desktopInstructionsPanel.style.fontSize = '14px';
+desktopInstructionsPanel.style.lineHeight = '1.45';
+desktopInstructionsPanel.style.backdropFilter = 'blur(8px)';
+desktopInstructionsPanel.style.border = '1px solid rgba(255,255,255,0.2)';
+desktopInstructionsPanel.style.display = isMobile ? 'none' : 'block';
+
+document.body.appendChild(desktopInstructionsPanel);
+
+/**
+ * ============================================================
+ * BOTÓN RESET MOBILE
+ * ============================================================
+ */
+
+const resetButton = document.createElement('button');
+
+resetButton.innerText = 'Reset';
+
+resetButton.style.position = 'fixed';
+resetButton.style.top = '16px';
+resetButton.style.right = '16px';
+resetButton.style.zIndex = '200';
+resetButton.style.padding = '10px 14px';
+resetButton.style.border = '1px solid rgba(255,255,255,0.35)';
+resetButton.style.borderRadius = '999px';
+resetButton.style.background = 'rgba(0,0,0,0.55)';
+resetButton.style.color = 'white';
+resetButton.style.fontFamily = 'sans-serif';
+resetButton.style.fontSize = '14px';
+resetButton.style.cursor = 'pointer';
+resetButton.style.backdropFilter = 'blur(8px)';
+resetButton.style.display = isMobile ? 'block' : 'none';
+
+resetButton.addEventListener('click', () => {
+  resetPlayerPosition();
+});
+
+document.body.appendChild(resetButton);
+
+/**
+ * ============================================================
+ * UI MOBILE
+ * ============================================================
+ */
 
 const mobileUI = document.createElement('div');
+
 mobileUI.innerHTML = `
   <div id="left-zone" style="
     position: fixed;
@@ -69,6 +212,7 @@ mobileUI.innerHTML = `
     height: 100vh;
     z-index: 20;
     touch-action: none;
+    display: ${isMobile ? 'block' : 'none'};
   ">
     <div id="joystick-base" style="
       position: absolute;
@@ -100,29 +244,32 @@ mobileUI.innerHTML = `
     height: 100vh;
     z-index: 20;
     touch-action: none;
+    display: ${isMobile ? 'block' : 'none'};
   "></div>
 `;
+
 document.body.appendChild(mobileUI);
 
 const leftZone = document.getElementById('left-zone');
 const rightZone = document.getElementById('right-zone');
-const joystickBase = document.getElementById('joystick-base');
 const joystickStick = document.getElementById('joystick-stick');
-
-let moveX = 0;
-let moveY = 0;
+const joystickBase = document.getElementById('joystick-base');
 
 let joystickActive = false;
 let joystickPointerId = null;
 let joystickCenter = { x: 0, y: 0 };
+
 const joystickRadius = 50;
 
 leftZone.addEventListener('pointerdown', (event) => {
+  if (!isMobile) return;
+
   joystickActive = true;
   joystickPointerId = event.pointerId;
   leftZone.setPointerCapture(event.pointerId);
 
   const rect = joystickBase.getBoundingClientRect();
+
   joystickCenter = {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
@@ -132,7 +279,9 @@ leftZone.addEventListener('pointerdown', (event) => {
 });
 
 leftZone.addEventListener('pointermove', (event) => {
+  if (!isMobile) return;
   if (!joystickActive || event.pointerId !== joystickPointerId) return;
+
   updateJoystick(event.clientX, event.clientY);
 });
 
@@ -164,10 +313,14 @@ function resetJoystick(event) {
   moveX = 0;
   moveY = 0;
 
-  joystickStick.style.transform = `translate(0px, 0px)`;
+  joystickStick.style.transform = 'translate(0px, 0px)';
 }
 
-// ---------- MOBILE LOOK CONTROL ----------
+/**
+ * ============================================================
+ * CONTROL DE MIRADA MOBILE
+ * ============================================================
+ */
 
 let lookActive = false;
 let lookPointerId = null;
@@ -178,6 +331,8 @@ const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const lookSensitivity = 0.003;
 
 rightZone.addEventListener('pointerdown', (event) => {
+  if (!isMobile) return;
+
   lookActive = true;
   lookPointerId = event.pointerId;
   rightZone.setPointerCapture(event.pointerId);
@@ -187,6 +342,7 @@ rightZone.addEventListener('pointerdown', (event) => {
 });
 
 rightZone.addEventListener('pointermove', (event) => {
+  if (!isMobile) return;
   if (!lookActive || event.pointerId !== lookPointerId) return;
 
   const dx = event.clientX - lastLookX;
@@ -216,12 +372,35 @@ function resetLook(event) {
   lookPointerId = null;
 }
 
-// ---------- DESKTOP START SCREEN ----------
+/**
+ * ============================================================
+ * RESET DE POSICIÓN
+ * ============================================================
+ */
 
-const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function resetPlayerPosition() {
+  controls.object.position.copy(initialCameraPosition);
+
+  camera.rotation.copy(initialCameraRotation);
+  camera.quaternion.setFromEuler(initialCameraRotation);
+
+  moveX = 0;
+  moveY = 0;
+
+  if (joystickStick) {
+    joystickStick.style.transform = 'translate(0px, 0px)';
+  }
+}
+
+/**
+ * ============================================================
+ * PANTALLA DE INICIO DESKTOP
+ * ============================================================
+ */
 
 if (!isMobile) {
   const instructions = document.createElement('div');
+
   instructions.innerHTML = `
     <div style="
       position: fixed;
@@ -238,10 +417,10 @@ if (!isMobile) {
       <div>
         <h1>Entrar al recorrido</h1>
         <p>Click para empezar</p>
-        <p>WASD / Flechas: moverse<br/>Mouse: mirar<br/>ESC: salir</p>
       </div>
     </div>
   `;
+
   document.body.appendChild(instructions);
 
   instructions.addEventListener('click', () => controls.lock());
@@ -257,7 +436,11 @@ if (!isMobile) {
   controls.unlock();
 }
 
-// ---------- LOOP ----------
+/**
+ * ============================================================
+ * LOOP PRINCIPAL DE ANIMACIÓN
+ * ============================================================
+ */
 
 const clock = new THREE.Clock();
 const speed = 3;
@@ -267,17 +450,14 @@ function animate() {
 
   const delta = clock.getDelta();
 
-  const usingKeyboard = controls.isLocked;
-  const usingTouch = isMobile;
-
-  if (usingKeyboard) {
+  if (controls.isLocked) {
     if (keys.forward) controls.moveForward(speed * delta);
     if (keys.backward) controls.moveForward(-speed * delta);
     if (keys.left) controls.moveRight(-speed * delta);
     if (keys.right) controls.moveRight(speed * delta);
   }
 
-  if (usingTouch) {
+  if (isMobile) {
     const forwardAmount = -moveY;
     const rightAmount = moveX;
 
@@ -290,8 +470,15 @@ function animate() {
 
 animate();
 
+/**
+ * ============================================================
+ * RESPONSIVE
+ * ============================================================
+ */
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
