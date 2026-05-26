@@ -69,6 +69,148 @@ controls.object.position.copy(initialCameraPosition);
 
 /**
  * ============================================================
+ * LOADER VISUAL
+ * ============================================================
+ */
+
+const loadingScreen = document.createElement('div');
+
+loadingScreen.innerHTML = `
+  <div style="
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: grid;
+    place-items: center;
+    background: #111;
+    color: white;
+    font-family: sans-serif;
+    text-align: center;
+  ">
+    <div style="width: 280px;">
+      <h2 style="margin-bottom: 24px;">
+        Cargando recorrido 3D...
+      </h2>
+
+      <div style="
+        width: 100%;
+        height: 10px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 999px;
+        overflow: hidden;
+      ">
+        <div id="loading-bar" style="
+          width: 0%;
+          height: 100%;
+          background: white;
+          transition: width 0.2s ease;
+        "></div>
+      </div>
+
+      <p id="loading-progress" style="
+        margin-top: 12px;
+        opacity: 0.8;
+      ">
+        0%
+      </p>
+
+      <p style="
+        opacity: 0.5;
+        font-size: 13px;
+        margin-top: 20px;
+      ">
+        En mobile puede tardar unos segundos.
+      </p>
+    </div>
+  </div>
+`;
+
+document.body.appendChild(loadingScreen);
+
+const loadingBar = document.getElementById('loading-bar');
+const loadingProgress = document.getElementById('loading-progress');
+
+let fakeProgress = 0;
+let modelLoaded = false;
+
+/**
+ * Fake loader progresivo.
+ * Avanza lentamente hasta 90%.
+ * Cuando el modelo termina de cargar → pasa a 100%.
+ */
+const fakeLoaderInterval = setInterval(() => {
+  if (modelLoaded) return;
+
+  if (fakeProgress < 90) {
+    fakeProgress += Math.random() * 8;
+
+    fakeProgress = Math.min(fakeProgress, 90);
+
+    loadingBar.style.width = `${fakeProgress}%`;
+    loadingProgress.innerText = `${Math.round(fakeProgress)}%`;
+  }
+}, 200);
+
+function finishLoading() {
+  modelLoaded = true;
+
+  clearInterval(fakeLoaderInterval);
+
+  loadingBar.style.width = `100%`;
+  loadingProgress.innerText = `100%`;
+
+  setTimeout(() => {
+    loadingScreen.style.opacity = '0';
+
+    loadingScreen.style.transition = 'opacity 0.4s ease';
+
+    setTimeout(() => {
+      loadingScreen.remove();
+    }, 400);
+  }, 300);
+}
+
+function showLoadingError(error) {
+  clearInterval(fakeLoaderInterval);
+
+  loadingScreen.innerHTML = `
+    <div style="
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      display: grid;
+      place-items: center;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+      padding: 24px;
+    ">
+      <div>
+        <h2>Error cargando el modelo 3D</h2>
+
+        <p>
+          Revisá que el archivo exista en:
+        </p>
+
+        <code>/public/model.glb</code>
+
+        <p style="
+          opacity: 0.7;
+          font-size: 14px;
+          margin-top: 16px;
+        ">
+          También puede pasar si el archivo es demasiado pesado para mobile.
+        </p>
+      </div>
+    </div>
+  `;
+
+  console.error(error);
+}
+
+/**
+ * ============================================================
  * CARGA DEL MODELO GLB
  * ============================================================
  */
@@ -76,19 +218,31 @@ controls.object.position.copy(initialCameraPosition);
 const loader = new GLTFLoader();
 
 loader.load(
+
   '/model.glb',
+
   (gltf) => {
+
     const model = gltf.scene;
 
     model.position.set(0, 0, 0);
+
     model.scale.set(1, 1, 1);
 
     scene.add(model);
+
+    finishLoading();
+
   },
+
   undefined,
+
   (error) => {
-    console.error('Error cargando GLB:', error);
+
+    showLoadingError(error);
+
   }
+
 );
 
 /**
