@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 /**
@@ -173,6 +174,14 @@ function finishLoading() {
 function showLoadingError(error) {
   clearInterval(fakeLoaderInterval);
 
+  console.error('Error completo cargando GLB:', error);
+
+  const errorMessage =
+    error?.message ||
+    error?.target?.statusText ||
+    JSON.stringify(error, null, 2) ||
+    'Error desconocido';
+
   loadingScreen.innerHTML = `
     <div style="
       position: fixed;
@@ -186,27 +195,24 @@ function showLoadingError(error) {
       text-align: center;
       padding: 24px;
     ">
-      <div>
+      <div style="max-width: 720px;">
         <h2>Error cargando el modelo 3D</h2>
 
-        <p>
-          Revisá que el archivo exista en:
-        </p>
+        <p>El archivo existe, pero Three.js no pudo interpretarlo.</p>
 
-        <code>/public/model.glb</code>
-
-        <p style="
-          opacity: 0.7;
-          font-size: 14px;
+        <pre style="
           margin-top: 16px;
-        ">
-          También puede pasar si el archivo es demasiado pesado para mobile.
-        </p>
+          padding: 16px;
+          background: rgba(255,255,255,0.08);
+          border-radius: 8px;
+          text-align: left;
+          white-space: pre-wrap;
+          overflow: auto;
+          max-height: 240px;
+        ">${errorMessage}</pre>
       </div>
     </div>
   `;
-
-  console.error(error);
 }
 
 /**
@@ -215,34 +221,34 @@ function showLoadingError(error) {
  * ============================================================
  */
 
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
 const loader = new GLTFLoader();
+loader.setDRACOLoader(dracoLoader);
 
 loader.load(
-
   '/model.glb',
 
   (gltf) => {
+    console.log('GLB cargado correctamente:', gltf);
 
     const model = gltf.scene;
 
     model.position.set(0, 0, 0);
-
     model.scale.set(1, 1, 1);
 
     scene.add(model);
 
     finishLoading();
-
   },
 
-  undefined,
+  (progress) => {
+    console.log('Progreso GLB:', progress.loaded, progress.total);
+  },
 
   (error) => {
-
     showLoadingError(error);
-
   }
-
 );
 
 /**
