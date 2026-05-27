@@ -26,8 +26,8 @@ const camera = new THREE.PerspectiveCamera(
   1000
 );
 
-const initialCameraPosition = new THREE.Vector3(0, 1.7, 3);
-const initialCameraRotation = new THREE.Euler(0, 0, 0, 'YXZ');
+const initialCameraPosition = new THREE.Vector3(-1.075, 0.245, 0.320);
+const initialCameraRotation = new THREE.Euler(-0.032, -0.282, -0.000, 'YXZ');
 
 camera.position.copy(initialCameraPosition);
 camera.rotation.copy(initialCameraRotation);
@@ -256,6 +256,8 @@ const keys = {
   backward: false,
   left: false,
   right: false,
+  up: false,
+  down: false,
 };
 
 let moveX = 0;
@@ -272,6 +274,12 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'KeyS' || event.code === 'ArrowDown') keys.backward = true;
   if (event.code === 'KeyA' || event.code === 'ArrowLeft') keys.left = true;
   if (event.code === 'KeyD' || event.code === 'ArrowRight') keys.right = true;
+  if (event.code === 'Space') keys.up = true;
+  if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') keys.down = true;
+
+  if (event.code === 'KeyP') {
+    logCurrentPosition();
+  }
 
   if (event.code === 'KeyR') {
     resetPlayerPosition();
@@ -283,6 +291,8 @@ document.addEventListener('keyup', (event) => {
   if (event.code === 'KeyS' || event.code === 'ArrowDown') keys.backward = false;
   if (event.code === 'KeyA' || event.code === 'ArrowLeft') keys.left = false;
   if (event.code === 'KeyD' || event.code === 'ArrowRight') keys.right = false;
+  if (event.code === 'Space') keys.up = false;
+  if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') keys.down = false;
 });
 
 /**
@@ -297,7 +307,10 @@ desktopInstructionsPanel.innerHTML = `
   <strong>Controles</strong><br/>
   WASD / Flechas: moverse<br/>
   Mouse: mirar<br/>
+  Espacio: subir<br/>
+  Shift: bajar<br/>
   R: resetear posición<br/>
+  P: log de posición y rotación<br/>
   ESC: salir
 `;
 
@@ -548,6 +561,27 @@ function resetPlayerPosition() {
 
 /**
  * ============================================================
+ * LOG CURRENT POSITION
+ * ============================================================
+ */
+
+function logCurrentPosition() {
+
+  const position = controls.object.position;
+  const rotation = camera.rotation;
+
+  console.log('Posición actual:');
+  console.log(`x: ${position.x.toFixed(3)}, y: ${position.y.toFixed(3)}, z: ${position.z.toFixed(3)}`);
+  console.log('Rotación actual:');
+  console.log(`x: ${rotation.x.toFixed(3)}, y: ${rotation.y.toFixed(3)}, z: ${rotation.z.toFixed(3)}`);
+  console.log('Copiar para initialCameraPosition:');
+  console.log(`const initialCameraPosition = new THREE.Vector3(${position.x.toFixed(3)}, ${position.y.toFixed(3)}, ${position.z.toFixed(3)});`);
+  console.log('Copiar para initialCameraRotation:');
+  console.log(`const initialCameraRotation = new THREE.Euler(${rotation.x.toFixed(3)}, ${rotation.y.toFixed(3)}, ${rotation.z.toFixed(3)}, 'YXZ');`);
+}
+
+/**
+ * ============================================================
  * PANTALLA DE INICIO DESKTOP
  * ============================================================
  */
@@ -604,19 +638,30 @@ function animate() {
 
   const delta = clock.getDelta();
 
-  if (controls.isLocked) {
-    if (keys.forward) controls.moveForward(speed * delta);
-    if (keys.backward) controls.moveForward(-speed * delta);
-    if (keys.left) controls.moveRight(-speed * delta);
-    if (keys.right) controls.moveRight(speed * delta);
-  }
+  if (controls.isLocked || isMobile) {
 
-  if (isMobile) {
-    const forwardAmount = -moveY;
-    const rightAmount = moveX;
+    const moveDirection = new THREE.Vector3();
 
-    controls.moveForward(forwardAmount * speed * delta);
-    controls.moveRight(rightAmount * speed * delta);
+    if (keys.forward) moveDirection.z -= 1;
+    if (keys.backward) moveDirection.z += 1;
+
+    if (keys.left) moveDirection.x -= 1;
+    if (keys.right) moveDirection.x += 1;
+
+    // Subir y bajar
+    if (keys.up) moveDirection.y += 1;
+    if (keys.down) moveDirection.y -= 1;
+
+    // Mobile joystick
+    if (isMobile) {
+      moveDirection.z += moveY;
+      moveDirection.x += moveX;
+    }
+    moveDirection.normalize();
+
+    // Hace que el movimiento siga la orientación de la cámara/mouse
+    moveDirection.applyQuaternion(camera.quaternion);
+    controls.object.position.addScaledVector(moveDirection, speed * delta);
   }
 
   renderer.render(scene, camera);
