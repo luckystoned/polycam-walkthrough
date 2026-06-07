@@ -3,29 +3,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-/**
- * ============================================================
- * DETECCIÓN DE DISPOSITIVO
- * ============================================================
- */
-
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-/**
- * ============================================================
- * CONFIGURACIÓN GENERAL DE LA ESCENA
- * ============================================================
- */
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
 
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
 const initialCameraPosition = new THREE.Vector3(-1.075, 0.245, 0.320);
 const initialCameraRotation = new THREE.Euler(-0.032, -0.282, -0.000, 'YXZ');
@@ -34,7 +17,6 @@ camera.position.copy(initialCameraPosition);
 camera.rotation.copy(initialCameraRotation);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -44,12 +26,6 @@ document.body.style.touchAction = 'none';
 
 document.body.appendChild(renderer.domElement);
 
-/**
- * ============================================================
- * ILUMINACIÓN
- * ============================================================
- */
-
 const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2);
 scene.add(light);
 
@@ -57,16 +33,40 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 2);
 dirLight.position.set(5, 10, 5);
 scene.add(dirLight);
 
+const controls = new PointerLockControls(camera, document.body);
+scene.add(controls.object);
+controls.object.position.copy(initialCameraPosition);
+
 /**
  * ============================================================
- * CONTROLES DE CÁMARA
+ * AUDIO
  * ============================================================
  */
 
-const controls = new PointerLockControls(camera, document.body);
+const ambientAudio = new Audio('/audio.mp3');
+ambientAudio.loop = true;
+ambientAudio.volume = 0.8;
 
-scene.add(controls.object);
-controls.object.position.copy(initialCameraPosition);
+let audioStarted = false;
+
+function startAudio() {
+  if (audioStarted) return;
+
+  ambientAudio
+    .play()
+    .then(() => {
+      audioStarted = true;
+    })
+    .catch((error) => {
+      console.warn('No se pudo reproducir el audio:', error);
+    });
+}
+
+function stopAudio() {
+  ambientAudio.pause();
+  ambientAudio.currentTime = 0;
+  audioStarted = false;
+}
 
 /**
  * ============================================================
@@ -134,17 +134,11 @@ const loadingProgress = document.getElementById('loading-progress');
 let fakeProgress = 0;
 let modelLoaded = false;
 
-/**
- * Fake loader progresivo.
- * Avanza lentamente hasta 90%.
- * Cuando el modelo termina de cargar → pasa a 100%.
- */
 const fakeLoaderInterval = setInterval(() => {
   if (modelLoaded) return;
 
   if (fakeProgress < 90) {
     fakeProgress += Math.random() * 8;
-
     fakeProgress = Math.min(fakeProgress, 90);
 
     loadingBar.style.width = `${fakeProgress}%`;
@@ -162,7 +156,6 @@ function finishLoading() {
 
   setTimeout(() => {
     loadingScreen.style.opacity = '0';
-
     loadingScreen.style.transition = 'opacity 0.4s ease';
 
     setTimeout(() => {
@@ -223,12 +216,12 @@ function showLoadingError(error) {
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+
 const loader = new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
 
 loader.load(
   '/model.glb',
-
   (gltf) => {
     console.log('GLB cargado correctamente:', gltf);
 
@@ -241,11 +234,9 @@ loader.load(
 
     finishLoading();
   },
-
   (progress) => {
     console.log('Progreso GLB:', progress.loaded, progress.total);
   },
-
   (error) => {
     showLoadingError(error);
   }
@@ -276,12 +267,41 @@ let moveY = 0;
  */
 
 document.addEventListener('keydown', (event) => {
-  if (event.code === 'KeyW' || event.code === 'ArrowUp') keys.forward = true;
-  if (event.code === 'KeyS' || event.code === 'ArrowDown') keys.backward = true;
-  if (event.code === 'KeyA' || event.code === 'ArrowLeft') keys.left = true;
-  if (event.code === 'KeyD' || event.code === 'ArrowRight') keys.right = true;
-  if (event.code === 'Space') keys.up = true;
-  if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') keys.down = true;
+  if (event.code === 'KeyW' || event.code === 'ArrowUp') {
+    keys.forward = true;
+    startAudio();
+  }
+
+  // S queda reservado para detener audio.
+  // Para retroceder, usar Flecha abajo.
+  if (event.code === 'ArrowDown') {
+    keys.backward = true;
+    startAudio();
+  }
+
+  if (event.code === 'KeyA' || event.code === 'ArrowLeft') {
+    keys.left = true;
+    startAudio();
+  }
+
+  if (event.code === 'KeyD' || event.code === 'ArrowRight') {
+    keys.right = true;
+    startAudio();
+  }
+
+  if (event.code === 'Space') {
+    keys.up = true;
+    startAudio();
+  }
+
+  if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
+    keys.down = true;
+    startAudio();
+  }
+
+  if (event.code === 'KeyS') {
+    stopAudio();
+  }
 
   if (event.code === 'KeyP') {
     logCurrentPosition();
@@ -294,7 +314,7 @@ document.addEventListener('keydown', (event) => {
 
 document.addEventListener('keyup', (event) => {
   if (event.code === 'KeyW' || event.code === 'ArrowUp') keys.forward = false;
-  if (event.code === 'KeyS' || event.code === 'ArrowDown') keys.backward = false;
+  if (event.code === 'ArrowDown') keys.backward = false;
   if (event.code === 'KeyA' || event.code === 'ArrowLeft') keys.left = false;
   if (event.code === 'KeyD' || event.code === 'ArrowRight') keys.right = false;
   if (event.code === 'Space') keys.up = false;
@@ -311,10 +331,13 @@ const desktopInstructionsPanel = document.createElement('div');
 
 desktopInstructionsPanel.innerHTML = `
   <strong>Controles</strong><br/>
-  WASD / Flechas: moverse<br/>
+  W / Flecha arriba: avanzar<br/>
+  Flecha abajo: retroceder<br/>
+  A / D: moverse lateral<br/>
   Mouse: mirar<br/>
   Espacio: subir<br/>
   Shift: bajar<br/>
+  S: detener audio<br/>
   R: resetear posición<br/>
   P: log de posición y rotación<br/>
   ESC: salir
@@ -572,16 +595,18 @@ function resetPlayerPosition() {
  */
 
 function logCurrentPosition() {
-
   const position = controls.object.position;
   const rotation = camera.rotation;
 
   console.log('Posición actual:');
   console.log(`x: ${position.x.toFixed(3)}, y: ${position.y.toFixed(3)}, z: ${position.z.toFixed(3)}`);
+
   console.log('Rotación actual:');
   console.log(`x: ${rotation.x.toFixed(3)}, y: ${rotation.y.toFixed(3)}, z: ${rotation.z.toFixed(3)}`);
+
   console.log('Copiar para initialCameraPosition:');
   console.log(`const initialCameraPosition = new THREE.Vector3(${position.x.toFixed(3)}, ${position.y.toFixed(3)}, ${position.z.toFixed(3)});`);
+
   console.log('Copiar para initialCameraRotation:');
   console.log(`const initialCameraRotation = new THREE.Euler(${rotation.x.toFixed(3)}, ${rotation.y.toFixed(3)}, ${rotation.z.toFixed(3)}, 'YXZ');`);
 }
@@ -645,7 +670,6 @@ function animate() {
   const delta = clock.getDelta();
 
   if (controls.isLocked || isMobile) {
-
     const moveDirection = new THREE.Vector3();
 
     if (keys.forward) moveDirection.z -= 1;
@@ -654,20 +678,25 @@ function animate() {
     if (keys.left) moveDirection.x -= 1;
     if (keys.right) moveDirection.x += 1;
 
-    // Subir y bajar
     if (keys.up) moveDirection.y += 1;
     if (keys.down) moveDirection.y -= 1;
 
-    // Mobile joystick
     if (isMobile) {
       moveDirection.z += moveY;
       moveDirection.x += moveX;
-    }
-    moveDirection.normalize();
 
-    // Hace que el movimiento siga la orientación de la cámara/mouse
-    moveDirection.applyQuaternion(camera.quaternion);
-    controls.object.position.addScaledVector(moveDirection, speed * delta);
+      const isMovingWithJoystick = Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05;
+
+      if (isMovingWithJoystick) {
+        startAudio();
+      }
+    }
+
+    if (moveDirection.lengthSq() > 0) {
+      moveDirection.normalize();
+      moveDirection.applyQuaternion(camera.quaternion);
+      controls.object.position.addScaledVector(moveDirection, speed * delta);
+    }
   }
 
   renderer.render(scene, camera);
