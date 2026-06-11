@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -37,12 +36,6 @@ scene.add(dirLight);
 const controls = new PointerLockControls(camera, document.body);
 scene.add(controls.object);
 controls.object.position.copy(initialCameraPosition);
-
-// VR: Botón de entrada (OBLIGATORIO)
-document.body.appendChild(VRButton.createButton(renderer));
-
-// Habilitar XR para el renderer
-renderer.xr.enabled = true;
 
 /**
  * ============================================================
@@ -709,7 +702,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-renderer.setAnimationLoop(animate);
+animate();
 
 /**
  * ============================================================
