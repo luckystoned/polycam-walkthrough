@@ -10,8 +10,8 @@ scene.background = new THREE.Color(0x111111);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-const initialCameraPosition = new THREE.Vector3(-1.075, 0.245, 0.320);
-const initialCameraRotation = new THREE.Euler(-0.032, -0.282, -0.000, 'YXZ');
+const initialCameraPosition = new THREE.Vector3(0.175, -4.261, 2.108);
+const initialCameraRotation = new THREE.Euler(-0.239, 0.603, -0.000, 'YXZ');
 
 camera.position.copy(initialCameraPosition);
 camera.rotation.copy(initialCameraRotation);
