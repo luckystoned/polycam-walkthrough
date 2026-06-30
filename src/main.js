@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -19,12 +20,14 @@ camera.rotation.copy(initialCameraRotation);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.xr.enabled = true;
 
 document.body.style.margin = '0';
 document.body.style.overflow = 'hidden';
 document.body.style.touchAction = 'none';
 
 document.body.appendChild(renderer.domElement);
+document.body.appendChild(VRButton.createButton(renderer));
 
 const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2);
 scene.add(light);
@@ -34,7 +37,10 @@ dirLight.position.set(5, 10, 5);
 scene.add(dirLight);
 
 const controls = new PointerLockControls(camera, document.body);
-scene.add(controls.object);
+const playerRig = new THREE.Group();
+
+scene.add(playerRig);
+playerRig.add(controls.object);
 controls.object.position.copy(initialCameraPosition);
 
 /**
@@ -331,6 +337,7 @@ const desktopInstructionsPanel = document.createElement('div');
 
 desktopInstructionsPanel.innerHTML = `
   <strong>Controles</strong><br/>
+  Oculus: Enter VR + analógico para moverse<br/>
   W / Flecha arriba: avanzar<br/>
   Flecha abajo: retroceder<br/>
   A / D: moverse lateral<br/>
@@ -575,6 +582,7 @@ function resetLook(event) {
  */
 
 function resetPlayerPosition() {
+  playerRig.position.set(0, 0, 0);
   controls.object.position.copy(initialCameraPosition);
 
   camera.rotation.copy(initialCameraRotation);
@@ -617,8 +625,11 @@ function logCurrentPosition() {
  * ============================================================
  */
 
+let desktopStartOverlay = null;
+
 if (!isMobile) {
   const instructions = document.createElement('div');
+  desktopStartOverlay = instructions;
 
   instructions.innerHTML = `
     <div style="
@@ -657,6 +668,110 @@ if (!isMobile) {
 
 /**
  * ============================================================
+ * WEBXR / OCULUS
+ * ============================================================
+ */
+
+let isInXR = false;
+
+const xrStickDeadzone = 0.15;
+const xrMoveDirection = new THREE.Vector3();
+const xrHeadEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const xrHeadYaw = new THREE.Quaternion();
+
+renderer.xr.addEventListener('sessionstart', () => {
+  isInXR = true;
+  controls.unlock();
+  startAudio();
+
+  desktopInstructionsPanel.style.display = 'none';
+
+  if (desktopStartOverlay) {
+    desktopStartOverlay.style.display = 'none';
+  }
+});
+
+renderer.xr.addEventListener('sessionend', () => {
+  isInXR = false;
+
+  if (!isMobile) {
+    desktopInstructionsPanel.style.display = 'block';
+
+    if (desktopStartOverlay && !controls.isLocked) {
+      desktopStartOverlay.style.display = 'block';
+    }
+  }
+});
+
+function readXRThumbstick() {
+  const session = renderer.xr.getSession();
+
+  if (!session) {
+    return { x: 0, y: 0 };
+  }
+
+  let bestX = 0;
+  let bestY = 0;
+  let bestStrength = 0;
+
+  for (const inputSource of session.inputSources) {
+    const axes = inputSource.gamepad?.axes;
+
+    if (!axes || axes.length < 2) continue;
+
+    const candidates = [
+      [2, 3],
+      [0, 1],
+    ];
+
+    for (const [xIndex, yIndex] of candidates) {
+      const x = axes[xIndex] ?? 0;
+      const y = axes[yIndex] ?? 0;
+      const strength = x * x + y * y;
+
+      if (strength > bestStrength) {
+        bestX = x;
+        bestY = y;
+        bestStrength = strength;
+      }
+    }
+  }
+
+  if (Math.sqrt(bestStrength) < xrStickDeadzone) {
+    return { x: 0, y: 0 };
+  }
+
+  if (bestStrength > 1) {
+    const length = Math.sqrt(bestStrength);
+
+    bestX /= length;
+    bestY /= length;
+  }
+
+  return { x: bestX, y: bestY };
+}
+
+function movePlayerWithXRController(delta) {
+  const { x, y } = readXRThumbstick();
+
+  if (x === 0 && y === 0) return;
+
+  startAudio();
+
+  xrMoveDirection.set(x, 0, y);
+
+  const xrCamera = renderer.xr.getCamera(camera);
+  xrHeadEuler.setFromQuaternion(xrCamera.quaternion);
+  xrHeadEuler.x = 0;
+  xrHeadEuler.z = 0;
+  xrHeadYaw.setFromEuler(xrHeadEuler);
+
+  xrMoveDirection.applyQuaternion(xrHeadYaw);
+  playerRig.position.addScaledVector(xrMoveDirection, speed * delta);
+}
+
+/**
+ * ============================================================
  * LOOP PRINCIPAL DE ANIMACIÓN
  * ============================================================
  */
@@ -665,11 +780,11 @@ const clock = new THREE.Clock();
 const speed = 3;
 
 function animate() {
-  requestAnimationFrame(animate);
-
   const delta = clock.getDelta();
 
-  if (controls.isLocked || isMobile) {
+  if (isInXR) {
+    movePlayerWithXRController(delta);
+  } else if (controls.isLocked || isMobile) {
     const moveDirection = new THREE.Vector3();
 
     if (keys.forward) moveDirection.z -= 1;
@@ -702,7 +817,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-animate();
+renderer.setAnimationLoop(animate);
 
 /**
  * ============================================================
