@@ -337,7 +337,7 @@ const desktopInstructionsPanel = document.createElement('div');
 
 desktopInstructionsPanel.innerHTML = `
   <strong>Controles</strong><br/>
-  Oculus: Enter VR + analógico para moverse<br/>
+  Oculus: izquierdo mueve, derecho gira/sube/baja<br/>
   W / Flecha arriba: avanzar<br/>
   Flecha abajo: retroceder<br/>
   A / D: moverse lateral<br/>
@@ -583,6 +583,7 @@ function resetLook(event) {
 
 function resetPlayerPosition() {
   playerRig.position.set(0, 0, 0);
+  playerRig.rotation.set(0, 0, 0);
   controls.object.position.copy(initialCameraPosition);
 
   camera.rotation.copy(initialCameraRotation);
@@ -675,9 +676,14 @@ if (!isMobile) {
 let isInXR = false;
 
 const xrStickDeadzone = 0.15;
+const xrTurnSpeed = 1.8;
+const xrVerticalSpeed = 2;
 const xrMoveDirection = new THREE.Vector3();
 const xrHeadEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const xrHeadYaw = new THREE.Quaternion();
+const xrHeadPosition = new THREE.Vector3();
+const xrRigOffset = new THREE.Vector3();
+const xrWorldUp = new THREE.Vector3(0, 1, 0);
 
 renderer.xr.addEventListener('sessionstart', () => {
   isInXR = true;
@@ -703,71 +709,125 @@ renderer.xr.addEventListener('sessionend', () => {
   }
 });
 
-function readXRThumbstick() {
-  const session = renderer.xr.getSession();
+function normalizeXRStick(x, y) {
+  const strength = Math.sqrt(x * x + y * y);
 
-  if (!session) {
+  if (strength < xrStickDeadzone) {
     return { x: 0, y: 0 };
   }
+
+  if (strength > 1) {
+    return {
+      x: x / strength,
+      y: y / strength,
+    };
+  }
+
+  return { x, y };
+}
+
+function getXRInputStick(inputSource) {
+  const axes = inputSource.gamepad?.axes;
+
+  if (!axes || axes.length < 2) {
+    return { x: 0, y: 0 };
+  }
+
+  const candidates = [
+    [2, 3],
+    [0, 1],
+  ];
 
   let bestX = 0;
   let bestY = 0;
   let bestStrength = 0;
 
-  for (const inputSource of session.inputSources) {
-    const axes = inputSource.gamepad?.axes;
+  for (const [xIndex, yIndex] of candidates) {
+    const x = axes[xIndex] ?? 0;
+    const y = axes[yIndex] ?? 0;
+    const strength = x * x + y * y;
 
-    if (!axes || axes.length < 2) continue;
-
-    const candidates = [
-      [2, 3],
-      [0, 1],
-    ];
-
-    for (const [xIndex, yIndex] of candidates) {
-      const x = axes[xIndex] ?? 0;
-      const y = axes[yIndex] ?? 0;
-      const strength = x * x + y * y;
-
-      if (strength > bestStrength) {
-        bestX = x;
-        bestY = y;
-        bestStrength = strength;
-      }
+    if (strength > bestStrength) {
+      bestX = x;
+      bestY = y;
+      bestStrength = strength;
     }
   }
 
-  if (Math.sqrt(bestStrength) < xrStickDeadzone) {
-    return { x: 0, y: 0 };
-  }
-
-  if (bestStrength > 1) {
-    const length = Math.sqrt(bestStrength);
-
-    bestX /= length;
-    bestY /= length;
-  }
-
-  return { x: bestX, y: bestY };
+  return normalizeXRStick(bestX, bestY);
 }
 
-function movePlayerWithXRController(delta) {
-  const { x, y } = readXRThumbstick();
+function readXRThumbsticks() {
+  const session = renderer.xr.getSession();
 
-  if (x === 0 && y === 0) return;
+  if (!session) {
+    return {
+      left: { x: 0, y: 0 },
+      right: { x: 0, y: 0 },
+    };
+  }
 
-  startAudio();
+  const sticks = {
+    left: { x: 0, y: 0 },
+    right: { x: 0, y: 0 },
+  };
 
-  xrMoveDirection.set(x, 0, y);
+  for (const inputSource of session.inputSources) {
+    const hand = inputSource.handedness;
 
+    if (hand !== 'left' && hand !== 'right') continue;
+
+    sticks[hand] = getXRInputStick(inputSource);
+  }
+
+  return sticks;
+}
+
+function getXRHeadYaw() {
   const xrCamera = renderer.xr.getCamera(camera);
+
   xrHeadEuler.setFromQuaternion(xrCamera.quaternion);
   xrHeadEuler.x = 0;
   xrHeadEuler.z = 0;
   xrHeadYaw.setFromEuler(xrHeadEuler);
 
-  xrMoveDirection.applyQuaternion(xrHeadYaw);
-  playerRig.position.addScaledVector(xrMoveDirection, speed * delta);
+  return xrHeadYaw;
+}
+
+function rotatePlayerRigAroundHead(angle) {
+  if (angle === 0) return;
+
+  const xrCamera = renderer.xr.getCamera(camera);
+
+  xrCamera.getWorldPosition(xrHeadPosition);
+  xrRigOffset.copy(playerRig.position).sub(xrHeadPosition);
+  xrRigOffset.applyAxisAngle(xrWorldUp, angle);
+
+  playerRig.position.copy(xrHeadPosition).add(xrRigOffset);
+  playerRig.rotation.y += angle;
+}
+
+function movePlayerWithXRController(delta) {
+  const { left, right } = readXRThumbsticks();
+  const isMoving = left.x !== 0 || left.y !== 0 || right.x !== 0 || right.y !== 0;
+
+  if (!isMoving) return;
+
+  startAudio();
+
+  if (left.x !== 0 || left.y !== 0) {
+    xrMoveDirection.set(left.x, 0, left.y);
+    xrMoveDirection.applyQuaternion(getXRHeadYaw());
+    playerRig.position.addScaledVector(xrMoveDirection, speed * delta);
+  }
+
+  if (right.x !== 0) {
+    rotatePlayerRigAroundHead(-right.x * xrTurnSpeed * delta);
+  }
+
+  if (right.y !== 0) {
+    playerRig.position.y += -right.y * xrVerticalSpeed * delta;
+  }
 }
 
 /**
